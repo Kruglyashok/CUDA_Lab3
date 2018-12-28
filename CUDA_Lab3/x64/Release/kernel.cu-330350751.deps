@@ -247,7 +247,8 @@ C:\Program Files (x86)\Microsoft Visual Studio\2017\Community\VC\Tools\MSVC\14.1
 C:\Program Files (x86)\Microsoft Visual Studio\2017\Community\VC\Tools\MSVC\14.15.26726\include\xcall_once.h
 C:\Program Files (x86)\Microsoft Visual Studio\2017\Community\VC\Tools\MSVC\14.15.26726\include\xerrc.h
 C:\Program Files (x86)\Windows Kits\10\Include\10.0.16299.0\ucrt\share.h
-C:\Program Files\NVIDIA GPU Computing Toolkit\CUDA\v10.0\include\cublas_v2.h
+C:\Program Files\NVIDIA GPU Computing Toolkit\CUDA\v10.0\include\cublas.h
+C:\Program Files\NVIDIA GPU Computing Toolkit\CUDA\v10.0\include\cuda_runtime.h
 c:\program files\nvidia gpu computing toolkit\cuda\v10.0\include\cublas_api.h
 c:\program files\nvidia gpu computing toolkit\cuda\v10.0\include\driver_types.h
 c:\program files\nvidia gpu computing toolkit\cuda\v10.0\include\cuComplex.h

@@ -2,7 +2,7 @@
 #include "device_launch_parameters.h"
 #include <iostream>
 #include "time.h"
-#include "cublas_v2.h"
+#include "cublas.h"
 #define IDX2C(i,j,ld) (((j)*(ld))+(i))
 
 void printMatr(float *M, int rows, int cols)
@@ -11,7 +11,7 @@ void printMatr(float *M, int rows, int cols)
 		printf("Matr:\n");
 		for (int i = 0; i < rows; ++i) {
 			for (int j = 0; j < cols; ++j) {
-				printf("%6.2f\t", M[i*cols + j]);
+				printf("%6.3f\t", M[i*cols + j]);
 			}
 			printf("\n");
 		}
@@ -38,7 +38,7 @@ void generate(float* &A, float* &b, int size) {
 		}
 		b[j] = rand() % 100;
 	}
-	float* transpA = new float[size];
+	float* transpA = new float[size*size];
 	for (int i = 0; i < size; ++i) {
 		for (int j = 0; j < size; ++j) {
 			transpA[i*size + j] = A[IDX2C(i, j, size)];
@@ -53,7 +53,9 @@ void generate(float* &A, float* &b, int size) {
 	for (int i = 0; i < size; ++i) {
 		for (int j = 0; j < size; ++j) {
 			A[IDX2C(i, j, size)] = temp[IDX2C(i, j, size)] / (float)100;
+			
 		}
+		b[i] /= (float)100;
 	}
 	printMatr(A, size, size);
 	printMatr(b, size, 1);
@@ -63,10 +65,10 @@ int main(int argc, char** argv)
 {
 	cublasStatus_t stat;
 	cublasHandle_t handle;
-	//int size = atoi(argv[1]);
-	//int iters = atoi(argv[2]);
-	int size = 4;
-	int iters = 1000;
+	int size = atoi(argv[1]);
+	int iters = atoi(argv[2]);
+	//int size = 4;
+	//int iters = 1000;
 	float *A = new float[size*size], *b = new float[size], *d_A, *d_b, *r, arr, arar, *x, *ar, *x0 = new float[size], t;
 	generate(A, b, size);
 	printf("finish gen\n");
@@ -74,9 +76,9 @@ int main(int argc, char** argv)
 		x0[i] = 1;
 	}
 	printf("filled x0\n");
-	stat = cublasCreate(&handle);
+	stat = cublasInit();
 	if (stat != CUBLAS_STATUS_SUCCESS) {
-		cublasDestroy(handle);
+		cublasShutdown();
 		printf("CUBLAS initialization failed\n");
 		return EXIT_FAILURE;
 	}
@@ -89,105 +91,106 @@ int main(int argc, char** argv)
 	printf("performed malloc\n");
 	stat = cublasSetMatrix(size, size, sizeof(*A), A, size, d_A, size);
 	if (stat != CUBLAS_STATUS_SUCCESS) {
-		cublasDestroy(handle);
+		cublasShutdown();
 		printf("cublas setmatrix error\n");
 		return EXIT_FAILURE;
 	}
 	stat = cublasSetVector(size, sizeof(float), b, 1, d_b, 1);
 	if (stat != CUBLAS_STATUS_SUCCESS) {
-		cublasDestroy(handle);
+		cublasShutdown();
 		printf("cublas setvector error\n");
 		return EXIT_FAILURE;
 	}
 	stat = cublasSetVector(size, sizeof(float), x0, 1, x, 1);
 	if (stat != CUBLAS_STATUS_SUCCESS) {
-		cublasDestroy(handle);
+		cublasShutdown();
 		printf("cublas setvector error\n");
 		return EXIT_FAILURE;
 	}
 	float alpha = 1.0f;
 	float beta = -1.0f;
 	float zero = 0.0f;
-	float eps = 0.001f;
+	float eps = 0.0001f;
 	bool flag = false;
 	printf("begin iters\n");
 	int it;
 	for (it = 0; it < iters; ++it) {
-		stat = cublasScopy(handle, size, d_b, 1, r, 1); //from d_b into r
+		cublasScopy(size, d_b, 1, r, 1); //from d_b into r
 		if (stat != CUBLAS_STATUS_SUCCESS) {
-			cublasDestroy(handle);
+			cublasShutdown();
 			printf("cublasSgemv  error\n");
 			return EXIT_FAILURE;
 		}
-		stat = cublasSgemv(handle, CUBLAS_OP_N, size, size, &alpha, d_A, size, x, 1, &beta, r, 1);// r = Ax - b; ~ ;r = Ax - r
+		cublasSgemv('N', size, size, alpha, d_A, size, x, 1, beta, r, 1);// r = Ax - b; ~ ;r = Ax - r
 		if (stat != CUBLAS_STATUS_SUCCESS) {
-			cublasDestroy(handle);
+			cublasShutdown();
 			printf("cublasSgemv  error\n");
 			return EXIT_FAILURE;
 		}
-		stat = cublasSgemv(handle, CUBLAS_OP_N, size, size, &alpha, d_A, size, r, 1, &zero, ar, 1);//Ar into ar
+		cublasSgemv('N', size, size, alpha, d_A, size, r, 1, zero, ar, 1);//Ar into ar
 		if (stat != CUBLAS_STATUS_SUCCESS) {
-			cublasDestroy(handle);
+			cublasShutdown();
 			printf("cublasSgemv error\n");
 			return EXIT_FAILURE;
 		}
-		stat = cublasSdot(handle, size, ar, 1, r, 1, &arr); //(Ar,r) 
+		arr = cublasSdot(size, ar, 1, r, 1); //(Ar,r) 
 		if (stat != CUBLAS_STATUS_SUCCESS) {
-			cublasDestroy(handle);
+			cublasShutdown();
 			printf("cublasSdot error\n");
 			return EXIT_FAILURE;
 		}
-		stat = cublasSdot(handle, size, ar, 1, ar, 1, &arar); //(Ar,Ar) 
+		arar = cublasSdot(size, ar, 1, ar, 1); //(Ar,Ar) 
 		if (stat != CUBLAS_STATUS_SUCCESS) {
 			printf("cublasSdot error\n"); 
-			cublasDestroy(handle);
+			cublasShutdown();
 			return EXIT_FAILURE;
 		} 
 		if (arar == 0) { 
 			printf("arar = 0\n");
-			cublasDestroy(handle);
+			cublasShutdown();
 			return EXIT_FAILURE;
 		}
 		t = - (arr / (float)arar);
-		stat = cublasSaxpy(handle, size, &t, r, 1, x, 1); //x = x - tr
+		cublasSaxpy(size, t, r, 1, x, 1); //x = x - tr
 		if (stat != CUBLAS_STATUS_SUCCESS) {
-			cublasDestroy(handle);
+			cublasShutdown();
 			printf("cublasSaxpy error\n");
 			return EXIT_FAILURE;
 		}
-		stat = cublasSgemv(handle, CUBLAS_OP_N, size, size, &alpha, d_A, size, x, 1, &zero, r, 1);//Ax into r
+		cublasSgemv('N', size, size, alpha, d_A, size, x, 1, zero, r, 1);//Ax into r
 		if (stat != CUBLAS_STATUS_SUCCESS) {
-			cublasDestroy(handle);
+			cublasShutdown();
 			printf("cublasSgemv error\n");
 			return EXIT_FAILURE;
 		}
-		stat = cublasSaxpy(handle, size, &beta, d_b, 1 ,r, 1); //r = r - d_b
+		cublasSaxpy(size, beta, d_b, 1 ,r, 1); //r = r - d_b
 		if (stat != CUBLAS_STATUS_SUCCESS) {
-			cublasDestroy(handle);
+			cublasShutdown();
 			printf("cublasSaxpy error\n");
 			return EXIT_FAILURE;
 		}
 		stat = cublasGetVector(size, sizeof(float), r, 1, x0, 1);
 		if (stat != CUBLAS_STATUS_SUCCESS) {
-			cublasDestroy(handle);
+			cublasShutdown();
 			printf("cublas get vector");
-			cublasDestroy(handle);
+			cublasShutdown();
 			return EXIT_FAILURE;
 		}
 		flag = true;
 		for (int i = 0; i < size; ++i) {
 			if (abs(x0[i]) > eps) { 
-				//printf("more than eps %d\n", i);
+				//printf("more than eps %d  %f\n", i, abs(x0[i]));
 				flag = false;
+				break;
 			}
 		}
 		if (flag) break;
 	}
 	printf("iters: %d\n", it);
 	stat = cublasGetVector(size, sizeof(float), x, 1, x0, 1);
-	if (stat != CUBLAS_STATUS_SUCCESS) {cublasDestroy(handle);
+	if (stat != CUBLAS_STATUS_SUCCESS) {
 		printf("cublas get vector");
-		cublasDestroy(handle);
+		cublasShutdown();
 		return EXIT_FAILURE;
 	}
 	cudaFree(d_A);
@@ -195,7 +198,7 @@ int main(int argc, char** argv)
 	cudaFree(x);
 	cudaFree(ar);
 	cudaFree(r);
-	cublasDestroy(handle);
+	cublasShutdown();
 	printf("end iters\n");
 	printMatr(x0, size, 1);
 	delete[]A; delete[]x0; delete[]b;
